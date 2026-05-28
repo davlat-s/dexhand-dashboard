@@ -1,0 +1,280 @@
+/* ── Bottom sheet — matches playPanel ───────────────────── */
+.servo-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 10;
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+/* ── Drag handle — matches dragHandle / dragPill ────────── */
+.panel-drag-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0 4px;
+  cursor: ns-resize;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.panel-drag-pill {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Tabs — matches playTabs ────────────────────────────── */
+.panel-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.panel-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 14px 4px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.panel-tab:hover  { color: var(--text); }
+.panel-tab-active { color: var(--text); }
+
+/* ── Reset row below sliders ──────────────────────────── */
+.servo-footer {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  align-items: center;
+  padding: 6px 24px 12px;
+  flex-shrink: 0;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  align-self: center;
+}
+
+.servo-reset-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.15s;
+  padding: 4px 0;
+}
+.servo-reset-btn:hover { color: var(--text); }
+
+/* ── Sliders — matches playSliders / playSlot / playRow ─── */
+.servo-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0 24px;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  align-self: center;
+  overflow: hidden;
+}
+
+/* 56px slot — same as playSlot */
+.servo-row {
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* label | track | value — same as playRow */
+.servo-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* matches playLabel: 11px, 40px wide, muted, uppercase */
+.servo-label {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  width: 44px;
+  flex-shrink: 0;
+}
+
+/* ── Slider track ───────────────────────────────────────── */
+.slider-track {
+  flex: 1;
+  position: relative;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 1px;
+}
+
+.slider-fill {
+  position: absolute;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* Visible thumb — matches play-slider */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+  padding: 24px 0;
+  box-sizing: content-box;
+  top: -24px;
+}
+.slider::-webkit-slider-runnable-track { height: 2px; background: transparent; }
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  margin-top: -6px;
+  cursor: pointer;
+}
+.slider::-moz-range-track { height: 2px; background: transparent; }
+.slider::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  border: none; cursor: pointer;
+}
+
+/* matches playValue: 11px, muted, 32px, right-align, opacity 0.5 */
+.servo-angle {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  opacity: 0.5;
+  width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.servo-angle-input {
+  width: 38px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 2px;
+  text-align: right;
+  flex-shrink: 0;
+  -moz-appearance: textfield;
+  font-variant-numeric: tabular-nums;
+}
+.servo-angle-input::-webkit-inner-spin-button,
+.servo-angle-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+.servo-angle-input:focus { outline: none; border-bottom-color: var(--accent); }
+
+/* ── Floating actions — matches playFloatLeft/Right ─────── */
+.panel-float-left-group {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.panel-float-action {
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.panel-float-action:hover  { color: var(--text); }
+.panel-float-right         { position: absolute; top: 20px; right: 0; z-index: 1; }
+.panel-float-active        { color: var(--accent); }
+.panel-float-active:hover  { color: var(--text-muted); }
+
+/* ── Default marker ─────────────────────────────────────── */
+.slider-default-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px; height: 10px;
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Edit mode — inline controls after slider ───────────── */
+.edit-number {
+  width: 32px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 1px 2px;
+  text-align: center;
+  flex-shrink: 0;
+  -moz-appearance: textfield;
+  font-variant-numeric: tabular-nums;
+}
+.edit-number::-webkit-inner-spin-button,
+.edit-number::-webkit-outer-spin-button { -webkit-appearance: none; }
+.edit-number:focus { outline: none; border-bottom-color: rgba(255,255,255,0.4); }
+
+.set-def-btn {
+  background: none;
+  border: none;
+  padding: 0 6px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.15s;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.set-def-btn:hover { color: var(--text) !important; }

@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg:           #0a0a0a;
+  --surface:      rgba(14, 16, 22, 0.80);
+  --border:       rgba(255, 255, 255, 0.07);
+  --border-hover: rgba(128, 203, 196, 0.35);
+  --accent:       #80cbc4;
+  --accent-dim:   rgba(128, 203, 196, 0.12);
+  --text:         #e8eaed;
+  --muted:        #6b7280;
+  --text-muted:   #6b7280;
+  --text-label:   #9ca3af;
+  --radius:       12px;
+  --font:         'Inter', system-ui, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  width: 100%;
+  min-width: 600px;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
