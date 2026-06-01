@@ -1,15 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react'
 import './BleStatus.css'
 
-const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-const NUS_RX_CHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'
+const NUS_SERVICE      = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+const NUS_RX_CHAR      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'
+const GESTURE_SERVICE  = '7def8317-7300-4ee6-8849-46face74ca2a'
+const GESTURE_CHAR     = '7def8317-7301-4ee6-8849-46face74ca2a'
 
 // view: 'button' | 'indicator' | 'all'
 export default function BleStatus({ onConnect, onStatusChange, view = 'all' }) {
   const [status, setStatus]         = useState('disconnected')
   const [deviceName, setDeviceName] = useState(null)
-  const deviceRef      = useRef(null)
-  const rxCharRef      = useRef(null)
+  const [btnHovered, setBtnHovered] = useState(false)
+  const deviceRef         = useRef(null)
+  const rxCharRef         = useRef(null)
+  const gestureCharRef    = useRef(null)
   const onStatusChangeRef = useRef(onStatusChange)
   useEffect(() => { onStatusChangeRef.current = onStatusChange }, [onStatusChange])
 
@@ -51,7 +55,7 @@ export default function BleStatus({ onConnect, onStatusChange, view = 'all' }) {
           { name: 'DexHand' },
           { namePrefix: 'Dex' },
         ],
-        optionalServices: [NUS_SERVICE],
+        optionalServices: [NUS_SERVICE, GESTURE_SERVICE],
       })
       deviceRef.current = device
       device.addEventListener('gattserverdisconnected', () => handleDisconnect(true))
@@ -62,8 +66,20 @@ export default function BleStatus({ onConnect, onStatusChange, view = 'all' }) {
 
       console.log('[BLE] RX char properties:', rxChar.properties)
 
+      // Gesture service — optional; only available on firmware with GesturePlayer
+      try {
+        const gestureService = await server.getPrimaryService(GESTURE_SERVICE)
+        const gestureChar    = await gestureService.getCharacteristic(GESTURE_CHAR)
+        gestureCharRef.current = gestureChar
+        console.log('[BLE] Gesture characteristic ready')
+      } catch (e) {
+        console.warn('[BLE] Gesture service not available (old firmware?):', e.message)
+        gestureCharRef.current = null
+      }
+
       setDeviceName(device.name)
       setStatus('connected')
+      setBtnHovered(false)
       notifyStatus('connected', device.name)
 
       // Heartbeat: keep link alive while idle. Skip silently if a write is
@@ -74,7 +90,7 @@ export default function BleStatus({ onConnect, onStatusChange, view = 'all' }) {
         else hbPending.current = true  // write in flight — send hb as soon as it completes
       }, 10000)
 
-      onConnect({ send, queue, mirror })
+      onConnect({ send, queue, mirror, defineGestureFrame, playGesture, stopGesture })
     } catch (err) {
       console.error('[BLE] connect error:', err)
       setStatus('disconnected')
@@ -192,6 +208,30 @@ export default function BleStatus({ onConnect, onStatusChange, view = 'all' }) {
     }
   }
 
+  // ── Gesture player writes (binary, direct to gestureCharacteristic) ──────────
+
+  // Write a raw Uint8Array to the gesture characteristic
+  async function writeGestureRaw(packet) {
+    const char = gestureCharRef.current
+    if (!char) throw new Error('Gesture characteristic not available')
+    await char.writeValueWithResponse(packet.buffer)
+  }
+
+  // Send a 26-byte DEFINE_FRAME packet (build outside and pass in)
+  async function defineGestureFrame(packet) {
+    await writeGestureRaw(packet)
+  }
+
+  // [0x03][id] — trigger playback of a programmed gesture
+  async function playGesture(id) {
+    await writeGestureRaw(new Uint8Array([0x03, id]))
+  }
+
+  // [0x04] — stop playback immediately
+  async function stopGesture() {
+    await writeGestureRaw(new Uint8Array([0x04]))
+  }
+
   function handleDisconnect(fromEvent) {
     if (disconnecting.current) { console.warn('[BLE] handleDisconnect: already handling, ignoring duplicate'); return }
     disconnecting.current = true
@@ -205,6 +245,7 @@ export default function BleStatus({ onConnect, onStatusChange, view = 'all' }) {
     mirrorPending.current = null
     mirrorDrain.current   = []
     rxCharRef.current     = null
+    gestureCharRef.current = null
     writing.current       = false
     hbPending.current     = false
     failStreak.current    = 0
@@ -230,9 +271,15 @@ export default function BleStatus({ onConnect, onStatusChange, view = 'all' }) {
 
   const btn = status !== 'connected'
     ? <button className="ble-btn" onClick={connect} disabled={status === 'connecting'}>
+        <div className={`ble-dot ${status}`} />
         {status === 'connecting' ? 'Connecting…' : 'Connect'}
       </button>
-    : <button className="ble-btn" onClick={disconnect}>Disconnect</button>
+    : <button className="ble-btn" onClick={disconnect}
+        onMouseEnter={() => setBtnHovered(true)}
+        onMouseLeave={() => setBtnHovered(false)}>
+        <div className={`ble-dot ${status}`} />
+        {btnHovered ? 'Disconnect' : (deviceName ?? 'Connected')}
+      </button>
 
   const indicator = (
     <div className="ble-indicator">

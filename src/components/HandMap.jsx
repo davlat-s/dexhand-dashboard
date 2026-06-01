@@ -58,6 +58,12 @@ export default function HandMap({ selectedZone, onSelectZone, controlMode, calib
   }, [zones])
 
   useEffect(() => {
+    function onReset() { setZones(defaults) }
+    window.addEventListener('dexhand:resetZones', onReset)
+    return () => window.removeEventListener('dexhand:resetZones', onReset)
+  }, [defaults])
+
+  useEffect(() => {
     if (!calibrate) return
     function onMove(e) {
       if (!drag.current || !innerRef.current) return

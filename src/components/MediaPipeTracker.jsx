@@ -139,7 +139,9 @@ export default function MediaPipeTracker({ active, onAngles }) {
   const rafRef      = useRef(null)
   const activeRef   = useRef(false)
   const lastSent    = useRef({})  // last angle sent per servo index
-  const lastWrist   = useRef(null) // previous frame wrist position for jank detection
+  const lastWrist   = useRef(null) // reserved for jank detection (currently disabled)
+  const wristZBase   = useRef(null)  // auto-calibrated wrist z neutral (set on first detection)
+  const wristZSmooth = useRef(null)  // EMA-smoothed z value
   const [status, setStatus] = useState('idle') // idle | loading | ready | error
 
   // Keep activeRef in sync so the rAF loop can read it without closure issues
@@ -184,15 +186,20 @@ export default function MediaPipeTracker({ active, onAngles }) {
   useEffect(() => {
     if (!active || status !== 'ready') return
     let stream = null
+    let aborted = false
 
     async function start() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+        // Cleanup may have fired while getUserMedia was pending
+        if (aborted) { stream.getTracks().forEach(t => t.stop()); return }
         if (!videoRef.current) return
         videoRef.current.srcObject = stream
         await videoRef.current.play()
-        loop()
+        // Guard again — cleanup can fire between srcObject assignment and play resolving
+        if (!aborted) loop()
       } catch (e) {
+        if (e.name === 'AbortError') return  // expected when effect cleans up mid-play
         console.error('[MP] camera error:', e)
         setStatus('error')
       }
@@ -208,16 +215,8 @@ export default function MediaPipeTracker({ active, onAngles }) {
         // the model may return garbage — skip the frame if the wrist teleports >0.3
         // normalised units between frames (real hand can't move that fast).
         if (lm && lm.length === 21) {
-          const wrist = lm[0]
-          const prev  = lastWrist.current
-          const jank  = prev
-            ? Math.sqrt((wrist.x-prev.x)**2 + (wrist.y-prev.y)**2 + (wrist.z-prev.z)**2)
-            : 0
-          lastWrist.current = wrist
-          if (jank < 0.3) {
-            processLandmarks(lm)
-            if (canvasRef.current) drawLandmarks(canvasRef.current, lm)
-          }
+          processLandmarks(lm)
+          if (canvasRef.current) drawLandmarks(canvasRef.current, lm)
         } else if (canvasRef.current) {
           // No hand detected — clear the overlay
           const ctx = canvasRef.current.getContext('2d')
@@ -229,39 +228,72 @@ export default function MediaPipeTracker({ active, onAngles }) {
 
     start()
     return () => {
+      aborted = true
       cancelAnimationFrame(rafRef.current)
       stream?.getTracks().forEach(t => t.stop())
       if (videoRef.current) videoRef.current.srcObject = null
       lastSent.current  = {}
       lastWrist.current = null
+      wristZBase.current   = null
+      wristZSmooth.current = null
     }
   }, [active, status]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function processLandmarks(lm) {
     const cfg = buildConfigMap()
     const angles = {}
+    // Mirror ignores configured min/max — use full 0–180 range with only def preserved
+    const free = idx => cfg[idx] ? { min: 0, max: 180, def: cfg[idx].def } : null
 
     // ── Fingers (index, middle, ring, pinky) ─────────────────────────────────
+    // Lower and upper are coupled: both driven by the average of MCP and PIP
+    // flexion. This prevents one joint overextending relative to the other
+    // and keeps the finger curl natural. Tip remains independent.
     for (const { lms: [mcp, pip, dip, tip], servos: [lower, upper, tipIdx] } of FINGERS) {
       const wrist = 0
-      const mcpFlex = Math.max(0, Math.min(1, flexionDeg(lm, wrist, mcp, pip)  / 90))
-      const pipFlex = Math.max(0, Math.min(1, flexionDeg(lm, mcp,   pip, dip)  / 90))
-      const dipFlex = Math.max(0, Math.min(1, flexionDeg(lm, pip,   dip, tip)  / 90))
+      const mcpFlex = Math.max(0, Math.min(1, flexionDeg(lm, wrist, mcp, pip)  / 60))
+      const pipFlex = Math.max(0, Math.min(1, flexionDeg(lm, mcp,   pip, dip)  / 60))
+      const dipFlex = Math.max(0, Math.min(1, flexionDeg(lm, pip,   dip, tip)  / 30))
 
-      if (cfg[lower])  angles[lower]  = flexionToServo(mcpFlex, cfg[lower])
-      if (cfg[upper])  angles[upper]  = flexionToServo(pipFlex, cfg[upper])
-      if (cfg[tipIdx]) angles[tipIdx] = flexionToServo(dipFlex, cfg[tipIdx])
+      const fingerFlex = (mcpFlex + pipFlex) / 2  // 1:1 coupling
+
+      const fl = free(lower), fu = free(upper), ft = free(tipIdx)
+      if (fl) angles[lower]  = flexionToServo(fingerFlex, fl)
+      if (fu) angles[upper]  = flexionToServo(fingerFlex, fu)
+      if (ft) angles[tipIdx] = flexionToServo(dipFlex,    ft)
     }
 
     // ── Thumb ─────────────────────────────────────────────────────────────────
     // Thumb Tip (servo 12): IP joint flexion
-    const thumbIPFlex = Math.max(0, Math.min(1, flexionDeg(lm, 2, 3, 4) / 90))
-    if (cfg[12]) angles[12] = flexionToServo(thumbIPFlex, cfg[12])
+    const THUMB_BIAS   = 15  // degrees of natural resting flex to subtract
+    const thumbIPFlex  = Math.max(0, Math.min(1, (flexionDeg(lm, 2, 3, 4) - THUMB_BIAS) / 45))
+    const f12 = free(12), f13 = free(13), f14 = free(14)
+    if (f12) angles[12] = flexionToServo(thumbIPFlex, f12)
 
     // Thumb MCP spread (servos 13/14 — Right/Left): CMC→MCP joint
-    const thumbMCPFlex = Math.max(0, Math.min(1, flexionDeg(lm, 1, 2, 3) / 90))
-    if (cfg[13]) angles[13] = flexionToServo(thumbMCPFlex, cfg[13])
-    if (cfg[14]) angles[14] = flexionToServo(thumbMCPFlex, cfg[14])
+    const thumbMCPFlex = Math.max(0, Math.min(1, (flexionDeg(lm, 1, 2, 3) - THUMB_BIAS) / 45))
+    if (f13) angles[13] = flexionToServo(thumbMCPFlex, f13)
+    if (f14) angles[14] = flexionToServo(thumbMCPFlex, f14)
+
+    // ── Wrist (servos 16 / 17) ──────────────────────────────────────────────
+    // Differential pair: left and right always move opposite each other.
+    // wristFlex=0 → back (L=90-DEG, R=90+DEG), wristFlex=1 → front (L=90+DEG, R=90-DEG)
+    const WRIST_Z_SPAN = 0.06  // ± z range for full travel
+    const WRIST_DEG    = 20    // ± degrees from 90 on the robot
+    const wristToMid = sub(lm[9], lm[0])
+    const zNorm = wristToMid.z / mag(wristToMid)
+    // EMA smoothing — higher alpha = more responsive, lower = smoother
+    const WRIST_ALPHA = 0.1
+    if (wristZSmooth.current === null) wristZSmooth.current = zNorm
+    else wristZSmooth.current += WRIST_ALPHA * (zNorm - wristZSmooth.current)
+    // Auto-calibrate: first detected frame sets the neutral baseline
+    if (wristZBase.current === null) wristZBase.current = wristZSmooth.current
+    const wristFlex = Math.max(0, Math.min(1,
+      (wristZSmooth.current - wristZBase.current + WRIST_Z_SPAN) / (2 * WRIST_Z_SPAN)
+    ))
+    const wristOffset = (wristFlex - 0.5) * 2 * WRIST_DEG
+    if (cfg[16]) angles[16] = Math.round(70  - wristOffset)
+    if (cfg[17]) angles[17] = Math.round(110 + wristOffset)
 
     // Only send servos that moved more than the threshold — keeps BLE traffic low
     const changed = {}
@@ -288,7 +320,7 @@ export default function MediaPipeTracker({ active, onAngles }) {
       borderRadius: 12,
       overflow: 'hidden',
       border: '1px solid rgba(255,255,255,0.1)',
-      background: '#0a0a0f',
+      background: 'var(--bg)',
       width: 'min(60vw, calc(80vh * 4 / 3))',
       aspectRatio: '4 / 3',
       display: 'flex',
@@ -302,7 +334,7 @@ export default function MediaPipeTracker({ active, onAngles }) {
       borderRadius: 10,
       overflow: 'hidden',
       border: '1px solid rgba(255,255,255,0.1)',
-      background: '#0a0a0f',
+      background: 'var(--bg)',
       width: 160,
       height: 120,
       display: 'flex',

@@ -1,24 +1,88 @@
 import { useState } from 'react'
 import BleStatus from './BleStatus.jsx'
+import { ITEMS } from '../gestures.js'
 
+export default function DashSidebar({
+  controlMode, mirrorActive, onToggleMirror,
+  calibrate, onToggleCalibrate,
+  onConnect, onStatusChange,
+  onCopyAngles, onPasteAngles, onResetAngles,
+  onPlayGesture, onPlaySequence,
+}) {
+  const [copied,     setCopied]     = useState(false)
+  const [pasted,     setPasted]     = useState(false)
+  const [pasteError, setPasteError] = useState(false)
+  const [reset,      setReset]      = useState(false)
+  const [activeGesture, setActiveGesture] = useState(null)
+  const faded = calibrate
 
-export default function DashSidebar({ controlMode, mirrorActive, onToggleMirror, calibrate, onToggleCalibrate, onConnect, onStatusChange }) {
-  const faded = controlMode || mirrorActive || calibrate
+  function handleCopy() {
+    onCopyAngles()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  function handleGesture(id, fn) {
+    setActiveGesture(id)
+    fn()
+  }
+
   return (
     <div style={{ ...s.sidebar, opacity: faded ? 0 : 1, pointerEvents: faded ? 'none' : 'all', transition: 'opacity 0.4s ease' }}>
 
       <p style={s.name}>DexHand Dashboard</p>
 
       <div style={s.section}>
-        <p style={s.sectionLabel}>Mode</p>
-        <ModeLink label="Mirror"    active={mirrorActive} onClick={onToggleMirror} />
-        <ModeLink label="Calibrate" active={calibrate}    onClick={onToggleCalibrate} />
-      </div>
-
-      <div style={{ ...s.section, marginTop: 24 }}>
         <p style={s.sectionLabel}>Device</p>
         <BleStatus view="button" onConnect={onConnect} onStatusChange={onStatusChange} />
       </div>
+
+      {!mirrorActive && !controlMode && (
+        <>
+          <div style={{ ...s.section, marginTop: 24 }}>
+            <p style={s.sectionLabel}>Mode</p>
+            <ModeLink label="Mirror"    active={mirrorActive} onClick={onToggleMirror} />
+            <ModeLink label="Calibrate" active={calibrate}    onClick={onToggleCalibrate} />
+          </div>
+
+          {ITEMS.length > 0 && (
+            <div style={{ ...s.section, marginTop: 24 }}>
+              <p style={s.sectionLabel}>Gestures</p>
+              {ITEMS.map(item => (
+                <ModeLink key={item.id} label={item.name} active={activeGesture === item.id}
+                  onClick={() => handleGesture(item.id, () =>
+                    item.frames ? onPlaySequence(item) : onPlayGesture(item)
+                  )} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {!mirrorActive && (
+        <div style={{ ...s.section, marginTop: 24 }}>
+          <p style={s.sectionLabel}>Servo Angles</p>
+          <ModeLink label={copied ? 'Copied ✓' : 'Copy'} active={copied} onClick={handleCopy} />
+          <ModeLink
+            label={pasted ? 'Applied ✓' : pasteError ? 'Wrong Input ✗' : 'Paste'}
+            active={pasted}
+            onClick={async () => {
+              const ok = await onPasteAngles()
+              if (ok) {
+                setPasted(true)
+                setTimeout(() => setPasted(false), 2000)
+              } else {
+                setPasteError(true)
+                setTimeout(() => setPasteError(false), 2000)
+              }
+            }} />
+          <ModeLink label={reset ? 'Reset ✓' : 'Reset'} active={reset} onClick={() => {
+            onResetAngles()
+            setReset(true)
+            setTimeout(() => setReset(false), 2000)
+          }} />
+        </div>
+      )}
 
     </div>
   )

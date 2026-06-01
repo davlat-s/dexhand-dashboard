@@ -87,7 +87,7 @@ function saveConfig(cfg) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)) } catch {}
 }
 
-export default function ServoPanel({ zone, onSelectZone, angles, onChange, editing, onToggleEditing }) {
+export default function ServoPanel({ zone, onSelectZone, angles, onChange, onResetZone, editing, onToggleEditing }) {
   const [config, setConfig] = useState(loadConfig)
   const [active, setActive] = useState(zone || 'index')
   const [panelH,  setPanelH]  = useState(36)
@@ -148,7 +148,9 @@ export default function ServoPanel({ zone, onSelectZone, angles, onChange, editi
   }
 
   function resetToDefaults() {
-    servos.forEach(({ index, def }) => onChange(index, def))
+    // Pass current zone's servos to App so it can bulk-queue via bleClient.queue()
+    // (calling onChange per-servo uses send() which is latest-wins and drops commands)
+    if (onResetZone) onResetZone(servos)
   }
 
   return (
@@ -187,7 +189,7 @@ export default function ServoPanel({ zone, onSelectZone, angles, onChange, editi
           return (
             <div key={index} className="servo-row">
               <div className="servo-meta">
-                <span className="servo-label">{label}</span>
+                <span className="servo-label">{index}.&nbsp;{label}</span>
 
                 <div className="slider-track">
                   {editing && <div className="slider-default-marker" style={{ left: `${defPct}%`, background: zoneColor, opacity: 0.5 }} />}
